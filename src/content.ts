@@ -1,47 +1,73 @@
 import debounce from "lodash.debounce"
 
+import { sendToBackground } from "@plasmohq/messaging"
+
 import type { TextNode } from "~interface/node"
-import {
-  getAllTextDOM,
-  getCurrentScrollAreaInformation,
-  getNodesInView
-} from "~utils/dom"
+import { checkIfNodeIsInView, getAllTextDOM } from "~utils/dom"
 
-const allTextDOMS: {
-  [key: string]: TextNode
-} = {}
+const commitTranslation = (textNodes: TextNode[]) => {
+  textNodes.forEach(({ node, translation }) => {
+    const targetNode = node as HTMLElement
 
-const commitTranslation = (textNode: TextNode) => {
-  if (textNode.translation) {
-    textNode.node.textContent = textNode.translation
-  }
-}
+    targetNode.childNodes.forEach((child) => {
+      if (child.nodeType === Node.TEXT_NODE) {
+        child.textContent = translation
+      }
+    })
 
-const recordTranslation = (textNodes: TextNode[]) => {
-  textNodes.forEach((textNode) => {
-    const targetNode = allTextDOMS[textNode.id]
-    if (targetNode.translation) {
-      return
-    }
-
-    targetNode.translation = "번역되었습니다."
-    commitTranslation(targetNode)
+    targetNode.dataset.translated = "true"
   })
 }
 
-const scrollHandler = debounce((e: Event) => {
-  const nodes = Object.values(allTextDOMS)
-  const area = getCurrentScrollAreaInformation({ nodes })
+const allTextDOMS: Array<TextNode> = []
 
-  const inviewNodes = getNodesInView(nodes, area)
-  recordTranslation(inviewNodes)
+const translate = async (nodes: TextNode[]) => {
+  try {
+    const response = await sendToBackground({
+      name: "translate",
+      body: {
+        nodes
+      }
+    })
+
+    return response
+  } catch (e) {
+    return "번역 실패) " + e
+  }
+}
+
+const checkIfNodeUnTranslated = (node: TextNode) => {
+  const targetNode = node.node as HTMLElement
+
+  return targetNode.dataset.translated !== "true"
+}
+
+const scrollHandler = debounce(async () => {
+  const inviewNodes = allTextDOMS.filter(({ node }) =>
+    checkIfNodeIsInView(node as HTMLElement)
+  )
+
+  const targetNodes = inviewNodes.filter(checkIfNodeUnTranslated)
+
+  if (targetNodes.length === 0) {
+    return
+  }
+
+  const response = await translate(targetNodes)
+
+  response.data.result.forEach((translatedText: string, index: number) => {
+    const nodeItem = targetNodes[index]
+
+    nodeItem.translation = translatedText
+  })
+
+  commitTranslation(targetNodes)
 }, 1000)
 
 const setTextDOMS = () => {
   const textDOMS = getAllTextDOM()
-  textDOMS.forEach((textDOM) => {
-    allTextDOMS[textDOM.id] = textDOM
-  })
+
+  allTextDOMS.push(...textDOMS)
 }
 
 const init = () => {

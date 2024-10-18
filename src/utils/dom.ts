@@ -5,39 +5,29 @@ interface ScrollAreaInformationOptions {
   margin?: number
 }
 
-export const getCurrentScrollAreaInformation = ({
-  margin = 1000
-}: ScrollAreaInformationOptions) => {
-  const current = window.scrollY
-  const viewportHeight =
-    window.innerHeight || document.documentElement.clientHeight
-
-  const start = Math.max(0, current - margin)
-  const end = current + viewportHeight + margin
-
+export const getScreenEdgePosition = () => {
   return {
-    start,
-    end,
-    current
+    top: window.scrollY,
+    bottom: window.scrollY + window.innerHeight
   }
 }
 
-export const getNodesInView = (
-  nodes: TextNode[],
-  scrollArea: ReturnType<typeof getCurrentScrollAreaInformation>
-) => {
-  return nodes.filter(({ node }) => {
-    const element = node as HTMLElement
-    const rect = element.getBoundingClientRect()
-    const elementTop = rect.top + window.scrollY
-    const elementBottom = rect.bottom + window.scrollY
+export const checkIfNodeIsInView = (node: HTMLElement, margin = 500) => {
+  const { top: nodeTop, bottom: nodeBottom } = node.getBoundingClientRect()
+  const { top: screenTop, bottom: screenBottom } = getScreenEdgePosition()
 
-    return elementTop >= scrollArea.start && elementBottom <= scrollArea.end
-  })
+  const nodeTopHigherThanScreenBottom =
+    nodeTop + window.scrollY - margin <= screenBottom
+  const nodeBottomLowerThanScreenTop =
+    nodeBottom + window.scrollY + margin >= screenTop
+
+  return nodeTopHigherThanScreenBottom && nodeBottomLowerThanScreenTop
 }
 
-export const getAllTextDOM = (): TextNode[] => {
-  const elementsWithTextChildren: TextNode[] = []
+const NO_TRANSLATION_TAGS = ["code", "pre", "script", "style"]
+
+export const getAllTextDOM = () => {
+  const elementsWithTextChildren = []
 
   const walker = document.createTreeWalker(
     document.body,
@@ -48,10 +38,24 @@ export const getAllTextDOM = (): TextNode[] => {
   let currentNode = walker.currentNode
 
   while (currentNode) {
+    // 현재 노드의 태그 이름을 소문자로 변환하여 확인합니다.
+    const tagName = currentNode.nodeName.toLowerCase()
+
+    if (tagName === "body") {
+      currentNode = walker.nextNode()
+      continue
+    }
+
+    // 'code', 'pre', 'script' 태그는 건너뜁니다.
+    if (NO_TRANSLATION_TAGS.includes(tagName)) {
+      currentNode = walker.nextSibling() // 현재 노드의 다음 형제 노드로 이동
+      continue
+    }
+
     const children = currentNode.childNodes
     if (children.length > 0) {
       let text = ""
-      const allTextChildren = Array.from(children).forEach((child) => {
+      Array.from(children).forEach((child) => {
         if (child.nodeType === Node.TEXT_NODE) {
           text += child.textContent
         }
@@ -60,7 +64,6 @@ export const getAllTextDOM = (): TextNode[] => {
         elementsWithTextChildren.push({
           node: currentNode,
           translation: null,
-          id: Math.random().toString(36).substr(2, 9),
           text
         })
       }

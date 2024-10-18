@@ -6,9 +6,43 @@
     <title>Document</title>
   </head>
   <body>
-    <span>
-      Hello
-      <a href=""> wolrd </a>
-    </span>
+    <div id="root">
+      <!-- <div>A</div>
+      <div>
+        B
+        <span> D </span>
+        <span>
+          <div>G</div>
+          E
+        </span>
+      </div>
+      <div>
+        <div>F</div>
+        C
+      </div> -->
+    </div>
+
+    <div>
+      <div style="height: 100px"></div>
+      <div class="foo" style="height: 100px"></div>
+    </div>
+
+    <script>
+      console.log(document.querySelector(".foo").getBoundingClientRect())
+
+      const root = document.getElementById("root")
+
+      const treeWalker = document.createTreeWalker(
+        root,
+        NodeFilter.SHOW_ELEMENT
+      )
+
+      let node = treeWalker.nextNode()
+
+      while (node) {
+        console.log(node)
+        node = treeWalker.nextNode()
+      }
+    </script>
   </body>
 </html>
